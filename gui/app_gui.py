@@ -427,59 +427,74 @@ class AppGUI:
             )
             _tip(w, "capture.show_roi_border")
 
+    def _on_device_mode_changed(self, sender, value) -> None:
+        """Handle device mode combo change."""
+        if value == "GPU (CUDA)":
+            self._cfg.set("inference.device", "cuda")
+            self._cfg.set("inference.fp16", True)
+        elif value == "CPU":
+            self._cfg.set("inference.device", "cpu")
+            self._cfg.set("inference.fp16", False)
+        else:
+            self._cfg.set("inference.device", "auto")
+            self._cfg.set("inference.fp16", self._cuda)
+
+    def _get_device_mode_label(self) -> str:
+        dev = self._cfg.get("inference.device", "auto")
+        if dev == "cuda":
+            return "GPU (CUDA)"
+        elif dev == "cpu":
+            return "CPU"
+        return "Авто"
+
     def _build_detection_tab(self) -> None:
         with dpg.tab(label="Детекция"):
-            dpg.add_text("Модель и параметры детекции", color=(200, 200, 255))
+            # ── Model section ────────────────────────────────────────
+            dpg.add_text("Модель", color=(200, 200, 255))
             dpg.add_separator()
 
             with dpg.group(horizontal=True):
-                w = dpg.add_input_text(
-                    label="Путь к модели (.pt)",
-                    default_value=self._cfg.get("inference.model_path", "yolov8n.pt"),
+                self._model_path_input_id = dpg.add_input_text(
+                    label="",
+                    default_value=self._cfg.get("inference.model_path", "yolo26n.pt"),
                     callback=lambda s, v: self._set_model_path(v),
                     on_enter=True,
-                    width=500,
+                    width=420,
                 )
-                self._model_path_input_id = w
-                dpg.add_button(label="Выбрать...", callback=lambda: self._open_model_file_dialog())
-            _tip(w, "inference.model_path")
+                dpg.add_button(label="Обзор...", callback=lambda: self._open_model_file_dialog())
+                if self._on_model_reload:
+                    dpg.add_button(label="Перезагрузить",
+                                   callback=lambda: self._on_model_reload())
+            _tip(self._model_path_input_id, "inference.model_path")
 
-            if self._on_model_reload:
-                dpg.add_button(label="Перезагрузить модель",
-                               callback=lambda: self._on_model_reload())
-
-            devices = ["auto", "cpu"]
+            # Device mode — simplified: Auto / GPU / CPU
+            device_items = ["Авто"]
             if self._cuda:
-                devices.append("cuda")
-            w = dpg.add_combo(
-                label="Устройство", items=devices,
-                default_value=self._cfg.get("inference.device", "auto"),
-                callback=lambda s, v: self._cfg.set("inference.device", v),
-            )
-            _tip(w, "inference.device")
+                device_items.append("GPU (CUDA)")
+            device_items.append("CPU")
 
-            w = dpg.add_combo(
-                label="Бэкенд", items=["torch", "tensorrt"],
-                default_value=self._cfg.get("inference.backend", "torch"),
-                callback=lambda s, v: self._cfg.set("inference.backend", v),
-            )
-            _tip(w, "inference.backend")
-            if not self._trt:
-                dpg.add_text(
-                    "TensorRT не найден: для запуска нужны tensorrt, pycuda и .engine файл.",
-                    color=(255, 200, 100),
-                    wrap=650,
+            cur_label = self._get_device_mode_label()
+            if cur_label not in device_items:
+                cur_label = "Авто"
+
+            with dpg.group(horizontal=True):
+                w = dpg.add_combo(
+                    label="Устройство",
+                    items=device_items,
+                    default_value=cur_label,
+                    callback=self._on_device_mode_changed,
+                    width=160,
                 )
+                _tip(w, "inference.device")
 
-            w = dpg.add_checkbox(
-                label="FP16",
-                default_value=self._cfg.get("inference.fp16", True),
-                callback=lambda s, v: self._cfg.set("inference.fp16", v),
-            )
-            _tip(w, "inference.fp16")
+                # Status indicator
+                if self._cuda:
+                    dpg.add_text("  GPU доступна", color=(100, 255, 100))
+                else:
+                    dpg.add_text("  GPU недоступна, используется CPU", color=(255, 200, 100))
 
             w = dpg.add_input_int(
-                label="Входное разрешение",
+                label="Разрешение модели",
                 default_value=self._cfg.get("inference.input_size", 640),
                 min_value=128, max_value=2048, step=32,
                 min_clamped=True, max_clamped=True,
@@ -487,8 +502,10 @@ class AppGUI:
             )
             _tip(w, "inference.input_size")
 
+            # ── Detection parameters ─────────────────────────────────
+            dpg.add_spacer(height=5)
+            dpg.add_text("Параметры детекции", color=(200, 200, 255))
             dpg.add_separator()
-            dpg.add_text("Фильтры детекции", color=(200, 255, 200))
 
             w = dpg.add_slider_float(
                 label="Порог уверенности",
@@ -868,64 +885,102 @@ class AppGUI:
             _tip(w, "preview.draw_text")
 
     def _build_export_tab(self) -> None:
-        with dpg.tab(label="Экспорт"):
-            dpg.add_text("Экспорт модели: .pt → ONNX → TensorRT", color=(200, 200, 255))
+        with dpg.tab(label="Конвертация"):
+            dpg.add_text("Конвертация модели для ускорения", color=(200, 200, 255))
             dpg.add_separator()
 
-            dpg.add_text("ONNX Экспорт", color=(200, 255, 200))
-
-            w = dpg.add_input_int(
-                label="ONNX Opset",
-                default_value=self._cfg.get("export.onnx_opset", 17),
-                min_value=9, max_value=20, min_clamped=True, max_clamped=True,
-                callback=lambda s, v: self._cfg.set("export.onnx_opset", v),
+            dpg.add_text(
+                "Конвертация ускоряет работу модели.\n"
+                "Порядок: .pt (обычная) -> ONNX (быстрее) -> TensorRT (максимум скорости, только GPU).",
+                color=(180, 180, 180), wrap=700,
             )
-            _tip(w, "export.onnx_opset")
+            dpg.add_spacer(height=8)
 
-            w = dpg.add_checkbox(
-                label="Динамические размеры",
-                default_value=self._cfg.get("export.onnx_dynamic", False),
-                callback=lambda s, v: self._cfg.set("export.onnx_dynamic", v),
+            # ── Step 1: ONNX ─────────────────────────────────────────
+            dpg.add_text("Шаг 1: Экспорт в ONNX", color=(100, 200, 255))
+            dpg.add_text(
+                "Конвертирует .pt модель в формат ONNX. Работает на CPU и GPU.",
+                color=(160, 160, 160), wrap=700,
             )
-            _tip(w, "export.onnx_dynamic")
+
+            with dpg.group(horizontal=True):
+                w = dpg.add_input_int(
+                    label="Opset", default_value=self._cfg.get("export.onnx_opset", 17),
+                    min_value=9, max_value=20, min_clamped=True, max_clamped=True,
+                    callback=lambda s, v: self._cfg.set("export.onnx_opset", v),
+                    width=100,
+                )
+                _tip(w, "export.onnx_opset")
+
+                w = dpg.add_checkbox(
+                    label="Динамич. размеры",
+                    default_value=self._cfg.get("export.onnx_dynamic", False),
+                    callback=lambda s, v: self._cfg.set("export.onnx_dynamic", v),
+                )
+                _tip(w, "export.onnx_dynamic")
 
             if self._on_export_onnx:
-                dpg.add_button(label="Экспортировать в ONNX",
-                               callback=lambda: threading.Thread(
-                                   target=self._on_export_onnx, daemon=True).start())
+                dpg.add_button(
+                    label="Экспортировать .pt -> ONNX",
+                    callback=lambda: threading.Thread(
+                        target=self._on_export_onnx, daemon=True).start(),
+                )
 
+            dpg.add_spacer(height=10)
             dpg.add_separator()
-            dpg.add_text("Движок TensorRT", color=(200, 255, 200))
 
-            w = dpg.add_checkbox(
-                label="FP16",
-                default_value=self._cfg.get("export.trt_fp16", True),
-                callback=lambda s, v: self._cfg.set("export.trt_fp16", v),
-            )
-            _tip(w, "export.trt_fp16")
+            # ── Step 2: TensorRT ─────────────────────────────────────
+            trt_color = (100, 200, 255) if self._trt else (120, 120, 120)
+            dpg.add_text("Шаг 2: Сборка TensorRT (опционально)", color=trt_color)
 
-            w = dpg.add_input_int(
-                label="Workspace (МБ)",
-                default_value=self._cfg.get("export.trt_workspace_mb", 4096),
-                min_value=256, max_value=32768, min_clamped=True, max_clamped=True,
-                callback=lambda s, v: self._cfg.set("export.trt_workspace_mb", v),
-            )
-            _tip(w, "export.trt_workspace_mb")
+            if self._trt:
+                dpg.add_text(
+                    "Собирает оптимизированный движок TensorRT из ONNX. Максимальная скорость на GPU.",
+                    color=(160, 160, 160), wrap=700,
+                )
+            else:
+                dpg.add_text(
+                    "TensorRT не установлен. Для использования установите пакеты tensorrt и pycuda.\n"
+                    "Без TensorRT модель будет работать через PyTorch (Шаг 1 достаточен).",
+                    color=(255, 200, 100), wrap=700,
+                )
+
+            with dpg.group(horizontal=True):
+                w = dpg.add_checkbox(
+                    label="FP16",
+                    default_value=self._cfg.get("export.trt_fp16", True),
+                    callback=lambda s, v: self._cfg.set("export.trt_fp16", v),
+                    enabled=self._trt,
+                )
+                _tip(w, "export.trt_fp16")
+
+                w = dpg.add_input_int(
+                    label="Память (МБ)", default_value=self._cfg.get("export.trt_workspace_mb", 4096),
+                    min_value=256, max_value=32768, min_clamped=True, max_clamped=True,
+                    callback=lambda s, v: self._cfg.set("export.trt_workspace_mb", v),
+                    width=120, enabled=self._trt,
+                )
+                _tip(w, "export.trt_workspace_mb")
 
             with dpg.group(horizontal=True):
                 self._engine_path_input_id = dpg.add_input_text(
-                    label="Путь engine",
+                    label="",
                     default_value=self._cfg.get("export.trt_engine_path", ""),
                     callback=lambda s, v: self._set_engine_path(v),
-                    on_enter=True,
-                    width=500,
+                    on_enter=True, width=420, enabled=self._trt,
+                    hint="Путь к .engine файлу (необязательно)",
                 )
-                dpg.add_button(label="Выбрать...", callback=lambda: self._open_engine_file_dialog())
+                dpg.add_button(label="Обзор...",
+                               callback=lambda: self._open_engine_file_dialog(),
+                               enabled=self._trt)
 
             if self._on_build_trt:
-                dpg.add_button(label="Собрать TensorRT Engine",
-                               callback=lambda: threading.Thread(
-                                   target=self._on_build_trt, daemon=True).start())
+                dpg.add_button(
+                    label="Собрать ONNX -> TensorRT Engine",
+                    callback=lambda: threading.Thread(
+                        target=self._on_build_trt, daemon=True).start(),
+                    enabled=self._trt,
+                )
 
     def _build_hotkeys_tab(self) -> None:
         with dpg.tab(label="Горячие клавиши"):

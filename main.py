@@ -604,17 +604,32 @@ def main() -> None:
     cfg = ConfigManager()
     log.info("Config loaded")
 
-    # ── Check capabilities ───────────────────────────────────────────
+    # ── Check capabilities & auto-configure device ──────────────────
     cuda_available = _check_cuda()
     trt_available = _check_trt()
     log.info(f"CUDA: {cuda_available}, TensorRT: {trt_available}")
 
-    if not cuda_available and cfg.get("inference.device") == "cuda":
-        log.warn("CUDA not available, falling back to CPU")
+    # Auto-detect: try CUDA first, fall back to CPU
+    device_cfg = cfg.get("inference.device", "auto")
+    if device_cfg == "auto":
+        if cuda_available:
+            cfg.set("inference.device", "cuda")
+            cfg.set("inference.fp16", True)
+            log.info("Авто-выбор устройства: CUDA (GPU)")
+        else:
+            cfg.set("inference.device", "cpu")
+            cfg.set("inference.fp16", False)
+            log.info("Авто-выбор устройства: CPU (GPU недоступна)")
+    elif device_cfg == "cuda" and not cuda_available:
+        log.warn("CUDA не найдена, переключение на CPU")
         cfg.set("inference.device", "cpu")
+        cfg.set("inference.fp16", False)
 
-    if not trt_available and cfg.get("inference.backend") == "tensorrt":
-        log.warn("TensorRT backend selected, but TensorRT is not available")
+    # Auto-detect backend: if TRT selected but not available, fall back to torch
+    backend_cfg = cfg.get("inference.backend", "torch")
+    if backend_cfg == "tensorrt" and not trt_available:
+        log.warn("TensorRT не найден, переключение на PyTorch")
+        cfg.set("inference.backend", "torch")
 
     # ── Monitors ─────────────────────────────────────────────────────
     monitors = get_monitor_list()
