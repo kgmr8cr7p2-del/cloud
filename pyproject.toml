@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "screen-aim-assistant"
+version = "1.0.0"
+description = "Screen capture + person detection + aim assist application"
+requires-python = ">=3.10"
+dependencies = [
+    "dearpygui>=1.11.1",
+    "numpy>=1.24.0",
+    "mss>=9.0.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "ultralytics>=8.0.0",
+    "onnx>=1.14.0",
+    "onnxruntime>=1.15.0",
+    "pynput>=1.7.6",
+    "Pillow>=10.0.0",
+    "opencv-python>=4.8.0",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "onnxruntime-gpu>=1.15.0",
+]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[tool.setuptools.packages.find]
+include = [
+    "capture*",
+    "inference*",
+    "detection*",
+    "tracking*",
+    "aim*",
+    "filters*",
+    "overlay*",
+    "gui*",
+    "telemetry*",
+    "config*",
+    "app_logging*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

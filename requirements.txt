@@ -1,0 +1,26 @@
+# Core
+dearpygui>=1.11.1
+numpy>=1.24.0
+
+# Screen capture
+dxcam>=0.0.5; sys_platform == "win32"
+mss>=9.0.0
+
+# Inference
+torch>=2.0.0
+torchvision>=0.15.0
+ultralytics>=8.0.0
+onnx>=1.14.0
+onnxruntime>=1.15.0
+onnxruntime-gpu>=1.15.0; sys_platform == "win32"
+
+# TensorRT (optional, install manually)
+# tensorrt>=8.6.0
+
+# Utilities
+pynput>=1.7.6
+Pillow>=10.0.0
+opencv-python>=4.8.0
+
+# Testing
+pytest>=7.0.0

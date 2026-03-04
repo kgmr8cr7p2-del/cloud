@@ -1,0 +1,93 @@
+{
+  "_version": 2,
+  "capture": {
+    "monitor_index": 0,
+    "roi_width": 400,
+    "roi_height": 400,
+    "fps_limit": 30,
+    "method": "mss",
+    "paused": false,
+    "show_roi_border": true
+  },
+  "inference": {
+    "model_path": "yolo26n.pt",
+    "device": "auto",
+    "backend": "torch",
+    "fp16": true,
+    "warmup_runs": 3,
+    "input_size": 640,
+    "engine_path": ""
+  },
+  "detection": {
+    "confidence": 0.45,
+    "nms_iou": 0.45,
+    "min_bbox_width": 10,
+    "min_bbox_height": 10,
+    "max_detections": 20,
+    "downscale": 1.0
+  },
+  "tracking": {
+    "lost_frames_threshold": 10,
+    "assoc_iou_threshold": 0.25,
+    "assoc_distance_threshold": 150,
+    "assoc_mode": "iou",
+    "switch_penalty": 50.0
+  },
+  "aim": {
+    "enabled": false,
+    "activation_mode": "hold",
+    "activation_key": "x2",
+    "sensitivity": 1.0,
+    "max_speed": 800,
+    "max_acceleration": 5000,
+    "deadzone": 5,
+    "aim_point": "center",
+    "aim_offset_x": 0.0,
+    "aim_offset_y": -0.33,
+    "speed_profile": "power",
+    "power_r0": 200.0,
+    "power_gamma": 0.7,
+    "piecewise_r1": 30,
+    "piecewise_r2": 200,
+    "piecewise_slow_factor": 0.3,
+    "piecewise_fast_factor": 1.5,
+    "tick_rate": 240
+  },
+  "filters": {
+    "type": "one_euro",
+    "apply_to": "error",
+    "ema_alpha": 0.3,
+    "one_euro_min_cutoff": 1.0,
+    "one_euro_beta": 0.007,
+    "one_euro_d_cutoff": 1.0,
+    "enable_x": true,
+    "enable_y": true
+  },
+  "overlay": {
+    "enabled": true,
+    "draw_bboxes": true,
+    "draw_locked_target": true,
+    "draw_crosshair": true,
+    "draw_aim_line": true,
+    "show_metrics": true
+  },
+  "preview": {
+    "enabled": true,
+    "draw_bboxes": true,
+    "draw_text": true,
+    "max_fps": 20
+  },
+  "export": {
+    "onnx_opset": 17,
+    "onnx_dynamic": false,
+    "trt_fp16": true,
+    "trt_workspace_mb": 4096,
+    "trt_engine_path": ""
+  },
+  "gui": {
+    "hotkey_toggle_mouse": "f6",
+    "hotkey_toggle_overlay": "f7",
+    "hotkey_lock_target": "",
+    "hotkey_pause_capture": "f8"
+  }
+}
